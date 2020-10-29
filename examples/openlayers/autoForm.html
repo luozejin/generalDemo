@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>autoForm</title>
+    <script type="text/javascript" include="bootstrap,jquery,widgets" src="../js/include-web.js"></script>
+    <script type="text/javascript" src="../../dist/ol/include-ol.js"></script>
+    <script src="../../dist/openlayers/jquery.pagination.js"></script>
+    <style>
+        .ol-popup {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+
+        .la {
+            width: 100px;
+        }
+
+        #inputValues td {
+            height: 35px;
+        }
+
+        #inputValues input {
+            width: 318px;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis
+        }
+
+        #close:hover {
+            background: #535353;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #inputValues input:focus {
+            outline: none;
+            box-shadow: 0 0 2.5px #0389FA;
+        }
+
+        .setName {
+            float: right;
+        }
+
+    </style>
+</head>
+
+<body style="margin: 0; overflow: hidden; background: #fff; width: 100%; height: 100%; position: absolute; top: 0">
+    <div class="loader loader-default is-active" id="loader" hidden data-text="loading..." data-half="true"
+        style="opacity: 0.4"></div>
+    <div id="map" style="width: 100%; height: 100%;"></div>
+    <div id="popup" class="ol-popup" style="width: 390px">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title" id="formName"></h3>
+            </div>
+            <div class="panel-body">
+                <form id="form">
+                    <div class="box" id='box'></div>
+                </form>
+            </div>
+            <div align="right">
+                <input type="button" id="btn" class="btn btn-primary" value="提交" style="margin: 0 15px 15px 0" />
+            </div>
+        </div>
+    </div>
+    <table class="imagetable" style="position: absolute; left: 10px; top: 75px">
+        <tr style="display: block; margin: 5px 0">
+            <td style="width: 25px; height: 10px; background: #ff8001; margin-right: 5px"></td>
+            <td>&nbsp; 变化</td>
+        </tr>
+        <tr style="display: block; margin: 5px 0">
+            <td style="width: 25px; height: 10px; background: #dee8f5"></td>
+            <td>&nbsp; 未变化</td>
+        </tr>
+    </table>
+    <div id="propertyTable" hidden
+        style="text-align: center; left: 10px; bottom: 100px; position: absolute; width: 21%;background: #eee;border: 1px solid #ccc;border-radius: 6px;">
+        <table style="display: inline-block; width: auto;" class="table table-condensed table-bordered;">
+            <thead>
+                <tr>
+                    <th>二调地类名称</th>
+                    <th>三调地类名称</th>
+                    <th>面积</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+        <div id="pagination" class="m-style" style="margin-top: -20px;font-size: 15px;color: #212121;"></div>
+    </div>
+
+    <div class="footer" style="width: 29%;position: absolute; left: 0; bottom: 50px;">
+        <div align="left" style="margin: 10px 0 0 10px">
+            <input type="button" id="set" class="btn btn-primary" value="设置" />
+            <span id="close" hidden
+                style="float: right;margin-right: 15px;font-size: 17px;border: 1.5px solid #a49f9f;width: 20px;height: 20px;text-align: center;line-height: 17px;">x</span>
+        </div>
+        <table id="inputValues" hidden style="margin: 5px;font-size: 14px;width: 96%;color: #555;float: left;">
+            <tbody>
+                <tr>
+                    <td class="la"><span class="setName">算子名称：</span> </td>
+                    <td><input type="text" class="inputs" name="" value="sps.WorkflowProcessFactory.models:changedata">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="la"><span class="setName">地图服务地址：</span></td>
+                    <td><input type="text" class="input" name=""
+                            value="http://localhost:8090/iserver/services/map-China100/rest/maps/China"></td>
+                </tr>
+                <tr>
+                    <td class="la"><span class="setName">中心点：</span></td>
+                    <td><input type="text" class="mapCenter" name="" value="[12679900, 4859990]"></td>
+                </tr>
+                <tr>
+                    <td class="la"><span class="setName">层级：</span></td>
+                    <td><input type="text" class="mapZoom" name="" value="11.5"></td>
+                </tr>
+                <div align="left" hidden class="button">
+                    <input type="button" id="determine" class="btn btn-primary" value="确定"
+                        style="position: absolute;bottom: 10px;right: 20px;" />
+                </div>
+            </tbody>
+        </table>
+    </div>
+    <script type="text/javascript">
+        // 页面刷新提示
+        document.body.onbeforeunload = function () {
+            return "您确定要离开此页面吗？"
+        }
+        var serverUrl = 'http://localhost:8090/iserver/services/geoprocessing/restjsr/gp/v2';
+        var identifier = 'sps.WorkflowProcessFactory.models:changedata';
+        // 令牌(token)
+        SuperMap.SecurityManager.registerToken(
+            serverUrl, 'cWDwvMNlLhOcG9hsel0kobDGIOmeKbRsdVQwkHiQu2JhMy0b3AHEA96Gg88TxCauDhEvVnKkFcJUk_Ln9xLZ-A..'
+        );
+        // 地图服务设置样式
+        $('#set').click(function () {
+            $('.footer').css({
+                'height': '225px',
+                'background': '#eee',
+                'overflow': 'hidden',
+                'position': 'absolute',
+                'bottom': '5px',
+                'left': '10px',
+                'border-radius': '5px',
+                'border': '1px solid rgb(204, 204, 204)'
+            });
+            $('#inputValues').css({
+                display: 'block'
+            });
+            $('.button').css({
+                display: 'block'
+            });
+            $('#close').css({
+                display: 'block'
+            });
+            $('#set').css({
+                display: 'none'
+            });
+            $('#propertyTable').css({
+                bottom: '250px'
+            });
+        })
+        $('#close').click(function () {
+            $('.footer').css({
+                'background': 'none',
+                'overflow': 'hidden',
+                'position': 'absolute',
+                'bottom': '50px',
+                'left': '10px',
+                'height': '50px',
+                'border': '0'
+            });
+            $('#inputValues').css({
+                display: 'none'
+            });
+            $('.button').css({
+                display: 'none'
+            });
+            $('#close').css({
+                display: 'none'
+            });
+            $('#set').css({
+                display: 'block'
+            });
+            $('#propertyTable').css({
+                bottom: '100px'
+            });
+        })
+        // 默认展示地图
+        function showMap(mapUrl, coord, mapCenter, mapZoom) {
+            map = new ol.Map({
+                target: 'map',
+                controls: ol.control.defaults({
+                        attributionOptions: {
+                            collapsed: false
+                        }
+                    })
+                    .extend([new ol.supermap.control.Logo()]),
+                view: new ol.View({
+                    center: mapCenter,
+                    zoom: mapZoom,
+                    projection: coord,
+                    multiWorld: true
+                })
+            });
+            var layer = new ol.layer.Tile({
+                source: new ol.source.TileSuperMapRest({
+                    url: mapUrl
+                }),
+                projection: coord
+            });
+            map.addLayer(layer);
+        }
+        showMap('http://localhost:8090/iserver/services/map-China100/rest/maps/China', 'EPSG:3857', eval(
+            '[12679900, 4859990]'), '11.5');
+
+        // 地图服务设置按钮
+        $('.button').click(function () {
+            identifier = $('.inputs').val();
+            $('.input-group').remove()
+            createTable(identifier);
+            var mapUrl = $('.input').val();
+            $.ajax({
+                type: 'GET',
+                url: `${mapUrl}.json`,
+                dataType: 'json',
+                success: function (data) {
+                    var center = `[${data.center.x}, ${data.center.y}]`;
+                    center = eval(center);
+                    var coord = `EPSG:${data.prjCoordSys.epsgCode}`;
+                    var mapCenter = $('.mapCenter').val();
+                    mapCenter = eval(mapCenter);
+                    var mapZoom = $('.mapZoom').val();
+                    $('.ol-viewport').remove();
+                    mapCenter ? mapCenter : (mapCenter = center);
+                    mapZoom ? mapZoom : (mapZoom = 2)
+                    if (coord == "EPSG:3857" || coord == "EPSG:4326") {
+                        showMap(mapUrl, coord, mapCenter, mapZoom);
+                    } else {
+                        proj4.defs('EPSG:4490', '+proj=longlat +ellps=GRS80 +no_defs');
+                        var extent = [73.62, 16.7, 134.77, 53.56];
+                        var projection = new ol.proj.Projection({
+                            code: coord,
+                            extent: extent
+                        });
+                        new ol.supermap.MapService(mapUrl).getMapInfo(function (serviceResult) {
+                            var mapJSONObj = serviceResult.result;
+                            var map = new ol.Map({
+                                target: 'map',
+                                controls: ol.control.defaults({
+                                        attributionOptions: {
+                                            collapsed: false
+                                        }
+                                    })
+                                    .extend([new ol.supermap.control.Logo()]),
+                                view: new ol.View({
+                                    center: mapCenter,
+                                    zoom: mapZoom,
+                                    projection: projection
+                                })
+                            });
+                            var layer = new ol.layer.Tile({
+                                source: new ol.source.TileSuperMapRest(ol.source
+                                    .TileSuperMapRest.optionsFromMapJSON(mapUrl,
+                                        mapJSONObj))
+                            });
+                            map.addLayer(layer);
+                            map.addControl(new ol.supermap.control.ScaleLine());
+                        });
+                    }
+                },
+                error: function () {
+                    console.log('请求失败');
+                }
+            })
+        })
+
+        // 自动生成表单 
+        var createTable = function (identifier) {
+            identifier = $('.inputs').val();
+            var geoprocessingService = new ol.supermap.GeoprocessingService(serverUrl).getTool(identifier,
+                function (serverResult) {
+                    $('#formName').text(serverResult.result.title);
+                    var inputs = serverResult.result.inputs;
+                    for (var i = 0; i < inputs.length; i++) {
+                        const inputId = inputs[i].id;
+                        // 必填项
+                        const isRequired = inputs[i].isRequired;
+                        var enumItems = inputs[i].enumItems;
+                        const defaultValue = inputs[i].defaultValue;
+                        const head =
+                            `<div class='input-group'><span data-toggle='tooltip' data-toggle="tooltip" title='<span>${inputId}</span>' data-html='true' data-placement='top' data-trigger='hover' class='input-group-addon' style='overflow:hidden; white-space:nowrap; text-overflow:ellipsis;display: inline-block;width:123px;height:34px;float:left;line-height:20px';>`;
+                        const input =
+                            `<input id='dataurl' type='text' style='overflow:hidden; white-space:nowrap; text-overflow:ellipsis;width: 232px;' class='form-control' name=${inputId} value='${defaultValue}'>`;
+                        const foot = '</div>' + '<p>' + '</p>' + '</div>';
+                        // 下拉框
+                        if (enumItems) {
+                            enumItems = eval(enumItems);
+                            const select =
+                                `<select class='form-control' id='Operator' name=${inputId} style='width: 232px;'>`;
+                            if (isRequired == true) {
+                                var option = head + `<span style='width: 85px'>` + inputId + "</span>" +
+                                    "<span style='color: red'>" + '*' +
+                                    "</span>" + "</span>" + select;
+                            }
+                            if (isRequired == false) {
+                                var option = head + `<span>` + inputId + "</span>" + "</span>" + select;
+                            }
+                            var optionArr = [];
+                            for (var j = 0; j < enumItems.length; j++) {
+                                var options = "<option>" + enumItems[j] + "</option>";
+                                optionArr.push(options)
+                            }
+                            var div = option + optionArr + "</select>" + '</div>' + '<p>' + '</p>';
+                        } else {
+                            if (isRequired == true) {
+                                div =
+                                    head +
+                                    `<span name=${inputId}>` +
+                                    inputId +
+                                    "</span><span style='color: red'>" +
+                                    '*' +
+                                    '</span>' +
+                                    '</span>' +
+                                    input +
+                                    foot;
+                            }
+                            if (isRequired == false) {
+                                div = head + inputId + '</span>' + input + foot;
+                            }
+                        }
+                        $('.box').append(div);
+                        $('[data-toggle="tooltip"]').tooltip();
+                    }
+                });
+        }
+        this.createTable(identifier)
+
+        // 提交按钮
+        $('#btn').click(function () {
+            var formArray = $("#form").serializeArray();
+            var parameter = {};
+            for (var i in formArray) {
+                parameter[formArray[i].name] = formArray[i].value;
+            }
+            $('#loader').css({
+                display: 'block'
+            });
+            var environments = [{
+                type: 'BDT_Spark_environments',
+                settings: [''],
+                appName: 'BDTSpark',
+                master: 'local[*]'
+            }];
+
+            // 异步执行
+            var GeoprocessingService = new ol.supermap.GeoprocessingService(serverUrl);
+            GeoprocessingService.submitJob(identifier, parameter, null,
+                function (serverResult) {
+                    var jobID = serverResult.result.jobID;
+                    var options = {
+                        interval: 1500,
+                        statusCallback: function (j) {
+                            // console.log(j);
+                        }
+                    };
+                    GeoprocessingService.waitForJobCompletion(jobID,
+                        identifier, options,
+                        function (
+                            serverResult) {
+                            if (serverResult.error) {
+                                widgets.loader.removeLoader();
+                                var errorMsg = serverResult.error.errorMsg || 'code: ' + serverResult
+                                    .error.code;
+                                widgets.alert.showAlert(resources.msg_createFailed + '<br>' + errorMsg,
+                                    false);
+                                return;
+                            }
+                            var results = JSON.parse(serverResult.result.messages.result);
+                            var variable = Object.values(results)[0];
+                            var jsonResults = JSON.parse(variable);
+                            // 结果为地图服务
+                            if (jsonResults[0].serviceAddress) {
+                                var serviceAddress = jsonResults[0].serviceAddress;
+                                var serviceUrl = jsonResults[0].serviceAddress + '/maps/' +
+                                    serviceAddress.substring(43, 58)
+                                // 地图叠加
+                                var jinJingLayer = new ol.layer.Tile({
+                                    source: new ol.source.TileSuperMapRest({
+                                        url: serviceUrl,
+                                    }),
+                                    projection: 'EPSG:4326',
+                                    origin: [-180, 90]
+                                });
+                                map.addLayer(jinJingLayer);
+                                $('#loader').css({
+                                    display: 'none'
+                                });
+                                return
+                            }
+
+                            if (jsonResults) {
+                                //json 属性表 默认第一页显示前5条
+                                var items = jsonResults.length > 5 ? jsonResults.slice(0, 5) :
+                                    jsonResults;
+                                var html = '';
+                                items.forEach((item) => {
+                                    html +=
+                                        '<tr>' +
+                                        '<th>' +
+                                        (item.properties.DLMC ? item.properties.DLMC : '') +
+                                        '</th>' +
+                                        '<th>' +
+                                        (item.properties.DLMC_1 ? item.properties.DLMC_1 : '') +
+                                        '</th>' +
+                                        '<th>' +
+                                        Math.floor(item.properties.Area) +
+                                        '</th>' +
+                                        '</tr>';
+                                });
+                                $('#list').html(html);
+                                //初始化分页
+                                $('#pagination').pagination({
+                                    //向上取整
+                                    totalData: jsonResults.length, //数据总条数
+                                    showData: 5, //每页显示的条数
+                                    keepShowPN: true, //是否一直显示上一页下一页
+                                    mode: 'unfixed', //分页模式，unfixed：不固定页码数量，fixed：固定页码数量
+                                    count: 2, //mode为unfixed时显示当前选中页前后页数，mode为fixed显示页码总数
+                                    //回调
+                                    callback: function (info) {
+                                        var index = info.getCurrent() - 1;
+                                        var items = jsonResults.slice(index * 5, (index +
+                                            1) * 5);
+                                        var html = '';
+                                        items.forEach((item) => {
+                                            html +=
+                                                '<tr>' +
+                                                '<th>' +
+                                                (item.properties.DLMC ? item
+                                                    .properties.DLMC : '') +
+                                                '</th>' +
+                                                '<th>' +
+                                                (item.properties.DLMC_1 ? item
+                                                    .properties.DLMC_1 : '') +
+                                                '</th>' +
+                                                '<th>' +
+                                                Math.floor(item.properties.Area) +
+                                                '</th>' +
+                                                '</tr>';
+                                        });
+                                        $('#list').html(html);
+                                    }
+                                });
+                                $('#propertyTable').show();
+
+                                //  结果为geojson
+                                for (var i = 0; i < jsonResults.length; i++) {
+                                    jsonResults[i].id = i;
+                                }
+                                var geojson = {
+                                    type: 'FeatureCollection',
+                                    features: jsonResults
+                                };
+                                // 用颜色区分面积是否改变
+                                var styleFunction = function (feature) {
+                                    var color;
+                                    if (feature.values_.ifchange === '0.0') {
+                                        color = '#DEE8F5'; // 无变化
+                                    } else {
+                                        color = '#FF8001';
+                                    }
+                                    var retStyle = new ol.style.Style({
+                                        stroke: new ol.style.Stroke({
+                                            color: '#8897AA',
+                                            width: 0.5
+                                        }),
+                                        fill: new ol.style.Fill({
+                                            color: color
+                                        })
+                                    });
+                                    return retStyle;
+                                };
+                                // 渲染
+                                var f = new ol.format.GeoJSON().readFeatures(geojson);
+                                var polygonSource = new ol.source.Vector({
+                                    features: f,
+                                    wrapX: false
+                                });
+                                vectorLayer = new ol.layer.Vector({
+                                    source: polygonSource,
+                                    style: styleFunction
+                                });
+                                map.addLayer(vectorLayer);
+                                widgets.loader.removeLoader();
+                                $('#loader').css({
+                                    overflow: 'hidden'
+                                });
+                            }
+                        });
+                });
+        });
+
+    </script>
+</body>
+
+</html>
